@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace NEAT
@@ -7,7 +8,23 @@ namespace NEAT
     class NodeMarkings
     {
         private static readonly Dictionary<int, NodeMarkings> dict = new Dictionary<int, NodeMarkings>();
+        private static readonly List<int> lst = new List<int>();
         private static int nextId = 0;
+
+        public static IReadOnlyDictionary<int, NodeMarkings> NM
+        {
+            get
+            {
+                return (IReadOnlyDictionary<int, NodeMarkings>)dict;
+            }
+        }
+        public static IList<int> IDS
+        {
+            get
+            {
+                return lst.AsReadOnly();
+            }
+        }
 
         public enum NodeType
         {
@@ -24,6 +41,7 @@ namespace NEAT
             Type = type;
             ID = nextId++;
             dict.Add(ID, this);
+            lst.Add(ID);
         }
 
         public override bool Equals(object obj)
@@ -82,7 +100,23 @@ namespace NEAT
     {
         private static readonly Dictionary<int, ConnectionMarkings> dict = new Dictionary<int, ConnectionMarkings>();
         private static readonly Dictionary<int, Dictionary<int, ConnectionMarkings>> dict2 = new Dictionary<int, Dictionary<int, ConnectionMarkings>>();
+        private static readonly List<int> lst = new List<int>();
         private static int nextId = 0;
+
+        public static IReadOnlyDictionary<int, ConnectionMarkings> CM
+        {
+            get
+            {
+                return (IReadOnlyDictionary<int, ConnectionMarkings>)dict;
+            }
+        }
+        public static IList<int> Innovations
+        {
+            get
+            {
+                return lst.AsReadOnly();
+            }
+        }
 
         public int Innovation { get; private set; }
         public int In { get; private set; }
@@ -100,6 +134,8 @@ namespace NEAT
 
             if (!dict2.ContainsKey(inNode)) dict2.Add(inNode, new Dictionary<int, ConnectionMarkings>());
             dict2[inNode].Add(outNode, this);
+
+            lst.Add(Innovation);
         }
 
         public override bool Equals(object obj)
@@ -163,6 +199,8 @@ namespace NEAT
     class Genom
     {
 
+        private static Random rnd = new Random();
+
         private long version = long.MinValue;
 
         private readonly SortedDictionary<int, Node> nodes; // all nodes (id -> node)
@@ -171,7 +209,13 @@ namespace NEAT
         private readonly SortedDictionary<int, Node> outputNodes; // just output nodes
         private readonly SortedDictionary<int, Connection> connections; // all connections (innovation -> connection)
         private readonly SortedDictionary<int, Dictionary<int, Connection>> inputs; // inputs : nodeX -> (inputNodesToNodeX -> ConnectionThatConnectsThoseTwoNodes)
-        
+
+        public IReadOnlyDictionary<int, Node> Nodes { get { return nodes; } }
+        public IReadOnlyDictionary<int, Node> SensorNodes { get { return sensorNodes; } }
+        public IReadOnlyDictionary<int, Node> HiddenNodes { get { return hiddenNodes; } }
+        public IReadOnlyDictionary<int, Node> OutputNodes { get { return outputNodes; } }
+        public IReadOnlyDictionary<int, Connection> Connections { get { return connections; } }
+
         public double Fitness { get; set; }
         public bool FitnessCalculated { get; set; }
 
@@ -330,10 +374,6 @@ namespace NEAT
             if (!inputs.ContainsKey(cm.Out)) inputs.Add(cm.Out, new Dictionary<int, Connection>());
             inputs[cm.Out].Add(cm.In, connection);
 
-            int d;
-            if (nodes[cm.Out].DistanceFromSensors < (d = nodes[cm.In].DistanceFromSensors + 1))
-                nodes[cm.Out].DistanceFromSensors = d;
-
             this.version++;
         }
 
@@ -402,14 +442,12 @@ namespace NEAT
             inputs.Add(newNodeId, new Dictionary<int, Connection>());
             inputs[newNodeId].Add(oldM.In, c1);
 
-            inputs[oldM.Out].Remove(oldM.In);
-
             this.version++;
 
             RecalculateNodesDistance();
         }
 
-        public void AddConnectionMutation(int innovation)
+        public void AddConnectionMutation(int innovation, double weight)
         {
 
             var cm = ConnectionMarkings.GetMarkings(innovation);
@@ -422,14 +460,13 @@ namespace NEAT
             if (nodes[cm.Out].DistanceFromSensors <= nodes[cm.In].DistanceFromSensors)
                 throw new Exception("Distance from sensors error -> FFN (feed-froward network) violation");
 
-            Connection c = new Connection(innovation);
+            Connection c = new Connection(innovation)
+            {
+                Weight = weight
+            };
             connections.Add(innovation, c);
             if (!inputs.ContainsKey(cm.Out)) inputs.Add(cm.Out, new Dictionary<int, Connection>());
             inputs[cm.Out].Add(cm.In, c);
-
-            int d;
-            if (nodes[cm.Out].DistanceFromSensors < (d = nodes[cm.In].DistanceFromSensors + 1))
-                nodes[cm.Out].DistanceFromSensors = d;
 
             this.version++;
 
@@ -437,64 +474,27 @@ namespace NEAT
 
         }
 
-        public IEnumerable<Node> Nodes()
+        public void ConnectionWeightMutation(double uniformPerturbationRate)
         {
-            long savedVersion = this.version;
-            foreach (var kvp in nodes)
+            foreach (var conn in connections.Values)
             {
-                if (savedVersion != this.version)
-                    throw new Exception("Concurrent modification");
-
-                yield return kvp.Value;
+                if (rnd.NextDouble() < uniformPerturbationRate)
+                    conn.Weight += StdNormalDistr();
+                else
+                    conn.Weight = rnd.NextDouble();
             }
         }
 
-        public IEnumerable<Node> SensorNodes()
+        private static double StdNormalDistr()
         {
-            long savedVersion = this.version;
-            foreach (var kvp in sensorNodes)
-            {
-                if (savedVersion != this.version)
-                    throw new Exception("Concurrent modification");
+            // Box - Muller
+            double value;
+            double u1 = rnd.NextDouble();
+            double u2 = rnd.NextDouble();
 
-                yield return kvp.Value;
-            }
-        }
+            double z = Math.Sqrt(-2 * Math.Log(u1)) * Math.Cos(2 * Math.PI * u2);
 
-        public IEnumerable<Node> HiddenNodes()
-        {
-            long savedVersion = this.version;
-            foreach (var kvp in hiddenNodes)
-            {
-                if (savedVersion != this.version)
-                    throw new Exception("Concurrent modification");
-
-                yield return kvp.Value;
-            }
-        }
-
-        public IEnumerable<Node> OutputNodes()
-        {
-            long savedVersion = this.version;
-            foreach (var kvp in outputNodes)
-            {
-                if (savedVersion != this.version)
-                    throw new Exception("Concurrent modification");
-
-                yield return kvp.Value;
-            }
-        }
-
-        public IEnumerable<Connection> Connections()
-        {
-            long savedVersion = this.version;
-            foreach (var kvp in connections)
-            {
-                if (savedVersion != this.version)
-                    throw new Exception("Concurrent modification");
-
-                yield return kvp.Value;
-            }
+            return z;
         }
 
         public IEnumerable<Connection> Inputs(int nodeId)
@@ -513,11 +513,388 @@ namespace NEAT
 
     }
 
+    class NEATPopulation
+    {
+
+        private static Random rnd = new Random();
+
+        public delegate double GetRandomConnectionWeight();
+        public delegate double Fitness(Genom g);
+
+        private readonly List<int> inputNodeIds = new List<int>();
+        private readonly List<int> outputNodeIds = new List<int>();
+        private List<Genom> population = new List<Genom>();
+
+        public int NumberOfInputs { get; }
+        public int NumberOfOutputs { get; }
+        public int PopulationSize { get; }
+        public double WeightMutationRate { get; }
+        public double WeightMutationPerturbationRate { get; }
+        public double AddNodeMutationRate { get; }
+        public double AddConnectionMutationRate { get; }
+        public GetRandomConnectionWeight RW { get; }
+        public Fitness Calculator { get; }
+        public double C1 { get; }
+        public double C2 { get; }
+        public double C3 { get; }
+        public double CompatibilityDistanceThreshold { get; }
+        public int GenomsInSpeciesChampionCopyThreshold { get; } // The champion of each species with more than GenomsInSpeciesChampionCopyThreshold networks is copied into the next generation unchanged
+        public Algorithms.GeneChooser Chooser { get; }
+        public IList<int> InputNodeIds
+        {
+            get
+            {
+                return inputNodeIds.AsReadOnly();
+            }
+        }
+        public IList<int> OutputNodeIds
+        {
+            get
+            {
+                return outputNodeIds.AsReadOnly();
+            }
+        }
+        public IList<Genom> Population
+        {
+            get
+            {
+                return population.AsReadOnly();
+            }
+        }
+
+        public NEATPopulation(int numOfInputs, int numOfOutputs, int populationSize, double weightMutationRate, double weightMutationPerturbationRate, double addNodeMutationRate, double addConnectionMutationRate, GetRandomConnectionWeight rw, Fitness calculator, double c1, double c2, double c3, double compatibilityDistanceThreshold, int genomsInSpeciesChampionCopyThreshold, Algorithms.GeneChooser chooser)
+        {
+            NumberOfInputs = numOfInputs;
+            NumberOfOutputs = numOfOutputs;
+            PopulationSize = populationSize;
+            WeightMutationRate = weightMutationRate;
+            WeightMutationPerturbationRate = weightMutationPerturbationRate;
+            AddNodeMutationRate = addNodeMutationRate;
+            AddConnectionMutationRate = addConnectionMutationRate;
+            RW = rw;
+            Calculator = calculator;
+            C1 = c1;
+            C2 = c2;
+            C3 = c3;
+            CompatibilityDistanceThreshold = compatibilityDistanceThreshold;
+            GenomsInSpeciesChampionCopyThreshold = genomsInSpeciesChampionCopyThreshold;
+            Chooser = chooser;
+
+            for (int i = 0; i < numOfInputs; i++)
+                inputNodeIds.Add(new NodeMarkings(NodeMarkings.NodeType.SENSOR).ID);
+
+            for (int i = 0; i < numOfOutputs; i++)
+                outputNodeIds.Add(new NodeMarkings(NodeMarkings.NodeType.OUTPUT).ID);
+
+            for (int i = 0; i < populationSize; i++)
+            {
+                var g = new Genom();
+
+                foreach (int id in inputNodeIds)
+                {
+                    g.AddNode(new Node(id, 0));
+                }
+
+                foreach (int id in outputNodeIds)
+                {
+                    g.AddNode(new Node(id, int.MaxValue));
+                }
+
+                foreach (int inId in inputNodeIds)
+                {
+                    foreach (int outId in outputNodeIds)
+                    {
+                        var cm = ConnectionMarkings.GetMarkings(inId, outId);
+                        if (cm == null) cm = new ConnectionMarkings(inId, outId);
+
+                        g.AddConnection(new Connection(cm.Innovation)
+                        {
+                            Weight = rw()
+                        });
+                    }
+                }
+
+                population.Add(g);
+            }
+
+            CalculateFitnessAndSortDescending();
+        }
+
+        public void Advance()
+        {
+
+            List<Genom> newPopulation = new List<Genom>();
+
+            Dictionary<List<Genom>, double> species = SpeciateAndFitnessSum();
+            double allSpeciesFitnessSum = 0;
+
+            // The champion of each species with more than GenomsInSpeciesChampionCopyThreshold networks is copied into the next generation unchanged
+            // Also calculating allSpeciesFitnessSum
+
+            foreach (var kvp in species)
+            {
+                var spec = kvp.Key;
+                allSpeciesFitnessSum += kvp.Value;
+
+                if (spec.Count > GenomsInSpeciesChampionCopyThreshold)
+                {
+                    Genom champion = spec[0];
+                    double championFitness = double.MinValue;
+
+                    foreach (var genom in spec)
+                    {
+                        if (genom.Fitness > championFitness)
+                        {
+                            champion = genom;
+                            championFitness = genom.Fitness;
+                        }
+                    }
+
+                    newPopulation.Add(champion);
+                }
+            }
+
+            while (newPopulation.Count < PopulationSize)
+            {
+                var g1 = SelectProportionally(species, 0);
+                var g2 = SelectProportionally(species, 0);
+                var offspring = Algorithms.Crossover(g1, g2, Chooser);
+                Mutate(offspring);
+                newPopulation.Add(offspring);
+            }
+
+            population = newPopulation;
+
+            CalculateFitnessAndSortDescending();
+        }
+
+        private Dictionary<List<Genom>, double> SpeciateAndFitnessSum()
+        {
+            var species = new List<List<Genom>>();
+            var toReturn = new Dictionary<List<Genom>, double>();
+
+            foreach (var genom in population)
+            {
+                bool foundCompatibility = false;
+                foreach (var spec in species)
+                {
+                    if (CompatibilityDistance(genom, spec[0]) < CompatibilityDistanceThreshold)
+                    {
+                        foundCompatibility = true;
+                        spec.Add(genom);
+                        break;
+                    }
+                }
+
+                if (!foundCompatibility)
+                {
+                    species.Add(new List<Genom>() { genom });
+                }
+            }
+
+            // calculate the adjusted fitness
+
+            foreach (var spec in species)
+            {
+                int sh = spec.Count;
+                double specSum = 0;
+                foreach (var genom in spec)
+                {
+                    genom.Fitness /= sh;
+                    specSum += genom.Fitness;
+                }
+                toReturn.Add(spec, specSum);
+            }
+
+            return toReturn;
+        }
+
+        private double CompatibilityDistance(Genom g1, Genom g2)
+        {
+
+            int e = 0, d = 0, n = 0;
+            double w = 0;
+
+            var enum1 = g1.Connections.GetEnumerator();
+            var enum2 = g2.Connections.GetEnumerator();
+            double weightDifferenceOfMatchingGenesSum = 0;
+            int numOfMatchingGenes = 0;
+            int numOfGenes1 = 0, numOfGenes2 = 0;
+
+            bool has1 = enum1.MoveNext(), has2 = enum2.MoveNext();
+            while(has1 || has2)
+            {
+                if (has1 && has2)
+                {
+                    if(enum1.Current.Value.Innovation < enum2.Current.Value.Innovation)
+                    {
+                        d++;
+                        has1 = enum1.MoveNext();
+                        numOfGenes1++;
+                    }
+                    else if(enum1.Current.Value.Innovation > enum2.Current.Value.Innovation)
+                    {
+                        d++;
+                        has2 = enum2.MoveNext();
+                        numOfGenes2++;
+                    }
+                    else
+                    {
+                        weightDifferenceOfMatchingGenesSum += Math.Abs(enum1.Current.Value.Weight - enum2.Current.Value.Weight);
+                        numOfMatchingGenes++;
+                        has1 = enum1.MoveNext();
+                        has2 = enum2.MoveNext();
+                        numOfGenes1++;
+                        numOfGenes2++;
+                    }
+                    continue;
+                }
+
+                e++;
+
+                if (has1)
+                {
+                    has1 = enum1.MoveNext();
+                    numOfGenes1++;
+                }
+                else if (has2)
+                {
+                    has2 = enum2.MoveNext();
+                    numOfGenes2++;
+                }
+
+            }
+
+            w = weightDifferenceOfMatchingGenesSum / numOfMatchingGenes;
+            n = numOfGenes1 > numOfGenes2 ? numOfGenes1 : numOfGenes2;
+
+            return C1 * e / n + C2 * d / n + C3 * w;
+
+        }
+
+        private Genom SelectProportionally(Dictionary<List<Genom>, double> speciesAndFitnessSums, double allSpeciesFitnessSum)
+        {
+            double random = rnd.NextDouble() * allSpeciesFitnessSum;
+
+            List<Genom> pickedSpecies = null;
+            double pickedSpeciesFitness = 0;
+
+            double fitnessSumCount = 0;
+
+            foreach (var kvp in speciesAndFitnessSums)
+            {
+                fitnessSumCount += kvp.Value;
+                pickedSpecies = kvp.Key;
+                pickedSpeciesFitness = kvp.Value;
+
+                if (fitnessSumCount > random)
+                    break;
+            }
+
+            random = rnd.NextDouble() * pickedSpeciesFitness;
+
+            Genom pickedGenom = null;
+
+            fitnessSumCount = 0;
+
+            foreach (var g in pickedSpecies)
+            {
+                fitnessSumCount += g.Fitness;
+                pickedGenom = g;
+
+                if (fitnessSumCount > random)
+                    break;
+            }
+
+            return pickedGenom;
+        }
+
+        private void Mutate(Genom g)
+        {
+            if (rnd.NextDouble() < WeightMutationRate)
+            {
+                g.ConnectionWeightMutation(WeightMutationPerturbationRate);
+            }
+
+            if (rnd.NextDouble() < AddNodeMutationRate)
+            {
+                int nmId = -1;
+
+                if (NodeMarkings.IDS.Count == g.Nodes.Count)
+                {
+                    nmId = new NodeMarkings(NodeMarkings.NodeType.HIDDEN).ID;
+                }
+                else
+                {
+                    foreach (int id in NodeMarkings.IDS)
+                    {
+                        if (g.GetNode(id) == null)
+                        {
+                            nmId = id;
+                            break;
+                        }
+                    }
+                }
+
+                g.AddNodeMutation(g.Connections.ElementAt(rnd.Next(0, g.Connections.Count)).Key, nmId);
+            }
+
+            if (rnd.NextDouble() < AddConnectionMutationRate)
+            {
+
+                int innovation = -1;
+                bool found = false;
+
+                foreach (var node1 in g.Nodes.Values)
+                {
+
+                    if (NodeMarkings.GetMarkings(node1.ID).Type == NodeMarkings.NodeType.OUTPUT)
+                        continue;
+
+                    foreach (var node2 in g.Nodes.Values)
+                    {
+                        ConnectionMarkings cm = ConnectionMarkings.GetMarkings(node1.ID, node2.ID);
+                        if (node1.ID == node2.ID || 
+                            NodeMarkings.GetMarkings(node2.ID).Type == NodeMarkings.NodeType.SENSOR ||
+                            (cm != null && g.Connections.ContainsKey(cm.Innovation)) ||
+                            node1.DistanceFromSensors >= node2.DistanceFromSensors)
+                            continue;
+
+                        found = true;
+                        innovation = cm == null ? new ConnectionMarkings(node1.ID, node2.ID).Innovation : cm.Innovation;
+
+                    }
+
+                    if (found) break;
+                }
+
+                if (found)
+                    g.AddConnectionMutation(innovation, RW());
+
+            }
+
+            g.RecalculateNodesDistance();
+        }
+
+        private void CalculateFitnessAndSortDescending()
+        {
+
+            foreach (var g in population)
+            {
+                g.Fitness = Calculator(g);
+                g.FitnessCalculated = true;
+            }
+
+            population.Sort((g1, g2) => g2.Fitness.CompareTo(g1.Fitness));
+
+        }
+
+    }
+
     static class Algorithms
     {
 
         public delegate Connection GeneChooser(Genom parent1, Genom parent2, int innovation);
-        public delegate double GetRandomConnectionWeight(double oldWeightValue);
         public delegate double ActivationFunction(double value);
 
         private static readonly Random rnd = new Random();
@@ -526,11 +903,11 @@ namespace NEAT
         {
             Genom offspring = new Genom();
 
-            var enumerator1 = parent1.Connections().GetEnumerator();
-            var enumerator2 = parent2.Connections().GetEnumerator();
+            var enumerator1 = parent1.Connections.Values.GetEnumerator();
+            var enumerator2 = parent2.Connections.Values.GetEnumerator();
 
             byte moreFitParent = parent1.Fitness > parent2.Fitness ? (byte)1 : (byte)2;
-            moreFitParent = parent1.Fitness == parent2.Fitness ? (byte)0 : moreFitParent;
+            moreFitParent = parent1.Fitness == parent2.Fitness ? (byte)rnd.Next(1, 3) : moreFitParent;
 
             bool has1 = enumerator1.MoveNext(), has2 = enumerator2.MoveNext();
             while(has1 || has2)
@@ -547,7 +924,7 @@ namespace NEAT
                     }
                     else if (enumerator1.Current.Innovation > enumerator2.Current.Innovation)
                     {
-                        if (moreFitParent != (byte)1)
+                        if (moreFitParent == (byte)1)
                         {
                             has2 = enumerator2.MoveNext();
                             continue;
@@ -596,7 +973,11 @@ namespace NEAT
                 if (offspring.GetNode(cm.Out) == null)
                     offspring.AddNode(new Node(cm.Out, -1));
 
-                Connection nc = new Connection(cm.Innovation);
+                Connection nc = new Connection(cm.Innovation)
+                {
+                    Enabled = c.Enabled,
+                    Weight = c.Weight
+                };
                 offspring.AddConnection(nc);
 
             }
@@ -604,46 +985,16 @@ namespace NEAT
             offspring.RecalculateNodesDistance();
 
             return offspring;
-        }
-
-        public static void ConnectionSingleWeightMutation(Genom g, double uniformPerturbationRate)
-        {
-            foreach (var conn in g.Connections())
-            {
-                if (rnd.NextDouble() < uniformPerturbationRate)
-                    conn.Weight += SmallValueNoramalDistr(conn.Weight - 1, 1 - conn.Weight);
-                else
-                    conn.Weight = rnd.NextDouble();
-            }
-        }
-
-        private static double SmallValueNoramalDistr(double lowerBond, double upperBond)
-        {
-            // Box - Muller
-            double range = upperBond - lowerBond;
-
-            double value;
-            do
-            {
-                double u1 = rnd.NextDouble();
-                double u2 = rnd.NextDouble();
-
-                double z = Math.Sqrt(-2 * Math.Log(u1)) * Math.Cos(2 * Math.PI * u2);
-
-                value = ((range / 2) / 3) * z + range / 2;
-            } while (value < lowerBond || value > upperBond); // 99.7% chance value will fall within bonds
-
-            return value;
-        }
+        }        
 
         public static void EvaluateNetwork(Genom g, Dictionary<int, double> inputValues, ActivationFunction af) // inputValues : sensorNodeId -> inputValue; return : nodeId -> value (for each node)
         {
-            foreach (var node in g.Nodes())
+            foreach (var node in g.Nodes.Values)
             {
                 node.ValueCalculated = false;
             }
 
-            foreach (var outNode in g.OutputNodes())
+            foreach (var outNode in g.OutputNodes.Values)
             {
                 EvaluateNodeRec(g, outNode.ID, inputValues, af);
             }
