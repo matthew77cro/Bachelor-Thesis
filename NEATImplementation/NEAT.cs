@@ -470,6 +470,7 @@ namespace NEAT
         public double C3 { get; }
         public double CompatibilityDistanceThreshold { get; }
         public int GenomsInSpeciesChampionCopyThreshold { get; } // The champion of each species with more than GenomsInSpeciesChampionCopyThreshold networks is copied into the next generation unchanged
+        public double CopyWithOnlyMutationPercentage { get; } // How much of a population is to be copied without crossover operator but only mutation
         public Algorithms.GeneChooser Chooser { get; }
         public IList<int> InputNodeIds
         {
@@ -494,7 +495,7 @@ namespace NEAT
         }
         public int GenerationNumber { get; private set; }
 
-        public NEATPopulation(int numOfInputs, int numOfOutputs, int populationSize, double weightMutationRate, double weightMutationPerturbationRate, double addNodeMutationRate, double addConnectionMutationRate, GetRandomConnectionWeight rw, Fitness calculator, double c1, double c2, double c3, double compatibilityDistanceThreshold, int genomsInSpeciesChampionCopyThreshold, Algorithms.GeneChooser chooser)
+        public NEATPopulation(int numOfInputs, int numOfOutputs, int populationSize, double weightMutationRate, double weightMutationPerturbationRate, double addNodeMutationRate, double addConnectionMutationRate, GetRandomConnectionWeight rw, Fitness calculator, double c1, double c2, double c3, double compatibilityDistanceThreshold, int genomsInSpeciesChampionCopyThreshold, double copyWithOnlyMutationPercentage, Algorithms.GeneChooser chooser)
         {
             NumberOfInputs = numOfInputs;
             NumberOfOutputs = numOfOutputs;
@@ -510,6 +511,7 @@ namespace NEAT
             C3 = c3;
             CompatibilityDistanceThreshold = compatibilityDistanceThreshold;
             GenomsInSpeciesChampionCopyThreshold = genomsInSpeciesChampionCopyThreshold;
+            CopyWithOnlyMutationPercentage = copyWithOnlyMutationPercentage;
             Chooser = chooser;
 
             for (int i = 0; i < numOfInputs; i++)
@@ -585,8 +587,8 @@ namespace NEAT
                 }
             }
 
-            // 25% of the population copied with mutation without crossover
-            int _25percentOfPopulation = (int) (0.25 * PopulationSize);
+            // p% of the population copied with mutation without crossover
+            int _25percentOfPopulation = (int) (CopyWithOnlyMutationPercentage * PopulationSize);
 
             for (int i = 0; i < _25percentOfPopulation && newPopulation.Count < PopulationSize; i++)
             {
