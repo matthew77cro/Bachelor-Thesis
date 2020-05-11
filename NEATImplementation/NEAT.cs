@@ -197,7 +197,7 @@ namespace NEAT
     class Genom
     {
 
-        private static Random rnd = new Random();
+        private static readonly Random rnd = new Random();
 
         private long version = long.MinValue;
 
@@ -420,7 +420,6 @@ namespace NEAT
         private static double StdNormalDistr()
         {
             // Box - Muller
-            double value;
             double u1 = rnd.NextDouble();
             double u2 = rnd.NextDouble();
 
@@ -448,7 +447,7 @@ namespace NEAT
     class NEATPopulation
     {
 
-        private static Random rnd = new Random();
+        private static readonly Random rnd = new Random();
 
         public delegate double GetRandomConnectionWeight();
         public delegate double Fitness(Genom g);
@@ -493,6 +492,7 @@ namespace NEAT
                 return population.AsReadOnly();
             }
         }
+        public int GenerationNumber { get; private set; }
 
         public NEATPopulation(int numOfInputs, int numOfOutputs, int populationSize, double weightMutationRate, double weightMutationPerturbationRate, double addNodeMutationRate, double addConnectionMutationRate, GetRandomConnectionWeight rw, Fitness calculator, double c1, double c2, double c3, double compatibilityDistanceThreshold, int genomsInSpeciesChampionCopyThreshold, Algorithms.GeneChooser chooser)
         {
@@ -562,7 +562,6 @@ namespace NEAT
 
             // The champion of each species with more than GenomsInSpeciesChampionCopyThreshold networks is copied into the next generation unchanged
             // Also calculating allSpeciesFitnessSum
-
             foreach (var kvp in species)
             {
                 var spec = kvp.Key;
@@ -586,6 +585,7 @@ namespace NEAT
                 }
             }
 
+            // 25% of the population copied with mutation without crossover
             int _25percentOfPopulation = (int) (0.25 * PopulationSize);
 
             for (int i = 0; i < _25percentOfPopulation && newPopulation.Count < PopulationSize; i++)
@@ -596,6 +596,7 @@ namespace NEAT
                 newPopulation.Add(gCopy);
             }
 
+            // Filling rest with crossover
             while (newPopulation.Count < PopulationSize)
             {
                 var g1 = SelectProportionally(species, 0);
@@ -608,6 +609,8 @@ namespace NEAT
             population = newPopulation;
 
             CalculateFitnessAndSortDescending();
+
+            GenerationNumber++;
         }
 
         private Dictionary<List<Genom>, double> SpeciateAndFitnessSum()
@@ -654,8 +657,8 @@ namespace NEAT
         private double CompatibilityDistance(Genom g1, Genom g2)
         {
 
-            int e = 0, d = 0, n = 0;
-            double w = 0;
+            int e = 0, d = 0, n;
+            double w;
 
             var enum1 = g1.Connections.GetEnumerator();
             var enum2 = g2.Connections.GetEnumerator();
@@ -831,8 +834,6 @@ namespace NEAT
 
         public delegate Connection GeneChooser(Genom parent1, Genom parent2, int innovation);
         public delegate double ActivationFunction(double value);
-
-        private static readonly Random rnd = new Random();
 
         public static Genom Crossover(Genom parent1, Genom parent2, GeneChooser chooser)
         {

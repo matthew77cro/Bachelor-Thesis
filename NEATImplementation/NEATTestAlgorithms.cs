@@ -7,9 +7,9 @@ namespace NEATTest
     class NEATTestAlgorithms
     {
 
-        private static Random rnd = new Random();
+        private static readonly Random rnd = new Random();
 
-        static void Main(string[] args)
+        static void Main()
         {
 
             int[] nmIds = new int[17];

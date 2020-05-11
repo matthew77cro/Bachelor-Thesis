@@ -7,21 +7,22 @@ namespace NEATTest
     class NEATTestXOR
     {
 
-        private static Random rnd = new Random();
+        private static readonly Random rnd = new Random();
 
-        public static void Main(string[] args)
+        public static void Main()
         {
 
             // xor 2 inputs + 1 bias
-            NEATPopulation neat = new NEATPopulation(3, 1, 150, 0.8, 0.9, 0.03, 0.05, RandomWeight, Fitness, 1, 1, 0.4, 3, 5, Chooser);
-
-            int gen = 0;
-            while (true)
+            NEATPopulation neat = new NEATPopulation(3, 1, 150, 0.8, 0.9, 0.3, 0.5, RandomWeight, Fitness, 1, 1, 0.4, 3, 5, Chooser);
+            Console.WriteLine("Gen" + neat.GenerationNumber + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count + " Connections: " + neat.Population[0].Connections.Count);
+            
+            while (neat.Population[0].Fitness != 4)
             {
-                Console.WriteLine("Gen" + gen + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count + " Connections: " + neat.Population[0].Connections.Count);
                 neat.Advance();
-                gen++;
+                Console.WriteLine("Gen" + neat.GenerationNumber + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count + " Connections: " + neat.Population[0].Connections.Count);
             }
+
+            Console.WriteLine(neat.Population[0]);
 
         }
 
