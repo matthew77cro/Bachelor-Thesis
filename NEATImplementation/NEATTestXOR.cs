@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using NEAT;
 
 namespace NEATTest
@@ -13,14 +12,13 @@ namespace NEATTest
         public static void Main(string[] args)
         {
 
-            // xor
-            NEATPopulation neat = new NEATPopulation(2, 1, 1000, 0.8, 0.9, 0.1, 0.1, RandomWeight, Fitness, 1, 1, 1, 3, 5, Chooser);
+            // xor 2 inputs + 1 bias
+            NEATPopulation neat = new NEATPopulation(3, 1, 150, 0.8, 0.9, 0.03, 0.05, RandomWeight, Fitness, 1, 1, 0.4, 3, 5, Chooser);
 
             int gen = 0;
             while (true)
             {
-                Console.WriteLine("Gen" + gen + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count);
-                Console.ReadKey();
+                Console.WriteLine("Gen" + gen + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count + " Connections: " + neat.Population[0].Connections.Count);
                 neat.Advance();
                 gen++;
             }
@@ -29,7 +27,8 @@ namespace NEATTest
 
         public static double RandomWeight()
         {
-            return rnd.NextDouble();
+            int sign = rnd.NextDouble() < 0.5 ? -1 : 1;
+            return sign * rnd.NextDouble() * double.MaxValue;
         }
 
         public static double Fitness(Genom g)
@@ -37,23 +36,23 @@ namespace NEATTest
             double fitness = 0;
 
             var gCopy = g.Copy();
-            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 0 }, { 1, 0 } }, ActivationFunction);
-            if (Math.Round(gCopy.GetNode(2).Value, MidpointRounding.ToPositiveInfinity) == 0)
+            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 1 }, { 1, 0 }, { 2, 0 } }, ActivationFunction, true);
+            if (Math.Round(gCopy.GetNode(3).Value, MidpointRounding.ToPositiveInfinity) == 0)
                 fitness++;
 
             gCopy = g.Copy();
-            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 0 }, { 1, 1 } }, ActivationFunction);
-            if (Math.Round(gCopy.GetNode(2).Value, MidpointRounding.ToPositiveInfinity) == 1)
+            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 1 }, { 1, 0 }, { 2, 1 } }, ActivationFunction, true);
+            if (Math.Round(gCopy.GetNode(3).Value, MidpointRounding.ToPositiveInfinity) == 1)
                 fitness++;
 
             gCopy = g.Copy();
-            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 1 }, { 1, 0 } }, ActivationFunction);
-            if (Math.Round(gCopy.GetNode(2).Value, MidpointRounding.ToPositiveInfinity) == 1)
+            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 1 }, { 1, 1 }, { 2, 0 } }, ActivationFunction, true);
+            if (Math.Round(gCopy.GetNode(3).Value, MidpointRounding.ToPositiveInfinity) == 1)
                 fitness++;
 
             gCopy = g.Copy();
-            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 1 }, { 1, 1 } }, ActivationFunction);
-            if (Math.Round(gCopy.GetNode(2).Value, MidpointRounding.ToPositiveInfinity) == 0)
+            Algorithms.EvaluateNetwork(gCopy, new Dictionary<int, double> { { 0, 1 }, { 1, 1 }, { 2, 1 } }, ActivationFunction, true);
+            if (Math.Round(gCopy.GetNode(3).Value, MidpointRounding.ToPositiveInfinity) == 0)
                 fitness++;
 
             return fitness;
@@ -67,19 +66,27 @@ namespace NEATTest
         public static Connection Chooser(Genom parent1, Genom parent2, int innovation)
         {
 
-            if (rnd.NextDouble() < 0.5)
-                return new Connection(innovation)
-                {
-                    Enabled = parent1.GetConnection(innovation).Enabled,
-                    Weight = parent1.GetConnection(innovation).Weight
-                };
-            else
-                return new Connection(innovation)
-                {
-                    Enabled = parent2.GetConnection(innovation).Enabled,
-                    Weight = parent2.GetConnection(innovation).Weight
-                };
+            byte disabledInParent = 0;
+            if (!parent1.GetConnection(innovation).Enabled) 
+                disabledInParent = 1;
+            if (!parent2.GetConnection(innovation).Enabled) 
+                disabledInParent = disabledInParent == 1 ? (byte)0 : (byte)2;
 
+            if (disabledInParent == 0)
+                if (rnd.NextDouble() < 0.5)
+                    return parent1.GetConnection(innovation);
+                else
+                    return parent2.GetConnection(innovation);
+            else if (disabledInParent == 1)
+                if (rnd.NextDouble() < 0.75)
+                    return parent1.GetConnection(innovation);
+                else
+                    return parent2.GetConnection(innovation);
+            else
+                if (rnd.NextDouble() < 0.75)
+                    return parent2.GetConnection(innovation);
+                else
+                    return parent1.GetConnection(innovation);
         }
 
     }

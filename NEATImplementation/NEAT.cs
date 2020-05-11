@@ -68,14 +68,13 @@ namespace NEAT
     {
         
         public int ID { get; private set; }
-        public int DistanceFromSensors { get; set; }
         public double Value { get; set; }
         public bool ValueCalculated { get; set; }
+        public bool Visited { get; set; }
 
-        public Node(int id, int distanceFromSensors)
+        public Node(int id)
         {
             ID = id;
-            DistanceFromSensors = distanceFromSensors;
         }
 
         private Node()
@@ -88,7 +87,6 @@ namespace NEAT
             return new Node()
             {
                 ID = this.ID,
-                DistanceFromSensors = this.DistanceFromSensors,
                 Value = this.Value,
                 ValueCalculated = this.ValueCalculated
             };
@@ -231,61 +229,6 @@ namespace NEAT
             FitnessCalculated = false;
         }
 
-        public void RecalculateNodesDistance()
-        {
-            foreach (var n in nodes.Values)
-            {
-                n.DistanceFromSensors = -1;
-            }
-
-            foreach (var n in nodes.Values)
-            {
-                UpdateNodeDistanceRec(n);
-            }
-        }
-
-        private void UpdateNodeDistanceRec(Node n)
-        {
-
-            if (n.DistanceFromSensors != -1)
-                return;
-
-            NodeMarkings nm = NodeMarkings.GetMarkings(n.ID);
-
-            if (nm.Type == NodeMarkings.NodeType.SENSOR)
-            {
-                n.DistanceFromSensors = 0;
-                return;
-            }
-            else if (nm.Type == NodeMarkings.NodeType.OUTPUT)
-            {
-                n.DistanceFromSensors = int.MaxValue;
-                return;
-            }
-            else if (!inputs.ContainsKey(n.ID) || inputs[n.ID].Count == 0)
-            {
-                n.DistanceFromSensors = -1;
-                return;
-            }
-
-            int maxValue = int.MinValue;
-            foreach (var input in inputs[n.ID])
-            {
-                if (!input.Value.Enabled)
-                    continue;
-                int nodeId = input.Key;
-                var node = nodes[nodeId];
-                UpdateNodeDistanceRec(node);
-                if (node.DistanceFromSensors + 1 > maxValue)
-                    maxValue = node.DistanceFromSensors + 1;
-            }
-
-            n.DistanceFromSensors = maxValue;
-
-            return;
-
-        }
-
         public Genom Copy()
         {
             var g = new Genom()
@@ -334,11 +277,6 @@ namespace NEAT
 
             if (nm == null)
                 throw new Exception("NodeId does not exist");
-
-            int distance = -1;
-            if (nm.Type == NodeMarkings.NodeType.SENSOR) distance = 0;
-            if (nm.Type == NodeMarkings.NodeType.OUTPUT) distance = int.MaxValue;
-            node.DistanceFromSensors = distance;
 
             nodes.Add(node.ID, node);
             switch (nm.Type)
@@ -419,7 +357,7 @@ namespace NEAT
                 Weight = old.Weight
             };
 
-            Node n = new Node(newNodeId, nodes[oldM.In].DistanceFromSensors + 1);
+            Node n = new Node(newNodeId);
             NodeMarkings nm = NodeMarkings.GetMarkings(newNodeId);
 
             nodes.Add(newNodeId, n);
@@ -443,8 +381,6 @@ namespace NEAT
             inputs[newNodeId].Add(oldM.In, c1);
 
             this.version++;
-
-            RecalculateNodesDistance();
         }
 
         public void AddConnectionMutation(int innovation, double weight)
@@ -457,8 +393,6 @@ namespace NEAT
                 throw new Exception("Connection with given innovation already exists");
             if (!nodes.ContainsKey(cm.In) || !nodes.ContainsKey(cm.Out))
                 throw new Exception("Nodes that this connections connects do not exist");
-            if (nodes[cm.Out].DistanceFromSensors <= nodes[cm.In].DistanceFromSensors)
-                throw new Exception("Distance from sensors error -> FFN (feed-froward network) violation");
 
             Connection c = new Connection(innovation)
             {
@@ -470,18 +404,16 @@ namespace NEAT
 
             this.version++;
 
-            RecalculateNodesDistance();
-
         }
 
-        public void ConnectionWeightMutation(double uniformPerturbationRate)
+        public void ConnectionWeightMutation(double uniformPerturbationRate, NEATPopulation.GetRandomConnectionWeight rw)
         {
             foreach (var conn in connections.Values)
             {
                 if (rnd.NextDouble() < uniformPerturbationRate)
                     conn.Weight += StdNormalDistr();
                 else
-                    conn.Weight = rnd.NextDouble();
+                    conn.Weight = rw();
             }
         }
 
@@ -592,12 +524,12 @@ namespace NEAT
 
                 foreach (int id in inputNodeIds)
                 {
-                    g.AddNode(new Node(id, 0));
+                    g.AddNode(new Node(id));
                 }
 
                 foreach (int id in outputNodeIds)
                 {
-                    g.AddNode(new Node(id, int.MaxValue));
+                    g.AddNode(new Node(id));
                 }
 
                 foreach (int inId in inputNodeIds)
@@ -652,6 +584,16 @@ namespace NEAT
 
                     newPopulation.Add(champion);
                 }
+            }
+
+            int _25percentOfPopulation = (int) (0.25 * PopulationSize);
+
+            for (int i = 0; i < _25percentOfPopulation && newPopulation.Count < PopulationSize; i++)
+            {
+                var g = SelectProportionally(species, 0);
+                var gCopy = g.Copy();
+                Mutate(gCopy);
+                newPopulation.Add(gCopy);
             }
 
             while (newPopulation.Count < PopulationSize)
@@ -813,7 +755,7 @@ namespace NEAT
         {
             if (rnd.NextDouble() < WeightMutationRate)
             {
-                g.ConnectionWeightMutation(WeightMutationPerturbationRate);
+                g.ConnectionWeightMutation(WeightMutationPerturbationRate, RW);
             }
 
             if (rnd.NextDouble() < AddNodeMutationRate)
@@ -848,16 +790,10 @@ namespace NEAT
                 foreach (var node1 in g.Nodes.Values)
                 {
 
-                    if (NodeMarkings.GetMarkings(node1.ID).Type == NodeMarkings.NodeType.OUTPUT)
-                        continue;
-
                     foreach (var node2 in g.Nodes.Values)
                     {
                         ConnectionMarkings cm = ConnectionMarkings.GetMarkings(node1.ID, node2.ID);
-                        if (node1.ID == node2.ID || 
-                            NodeMarkings.GetMarkings(node2.ID).Type == NodeMarkings.NodeType.SENSOR ||
-                            (cm != null && g.Connections.ContainsKey(cm.Innovation)) ||
-                            node1.DistanceFromSensors >= node2.DistanceFromSensors)
+                        if ((cm != null && g.Connections.ContainsKey(cm.Innovation)))
                             continue;
 
                         found = true;
@@ -873,7 +809,6 @@ namespace NEAT
 
             }
 
-            g.RecalculateNodesDistance();
         }
 
         private void CalculateFitnessAndSortDescending()
@@ -907,7 +842,7 @@ namespace NEAT
             var enumerator2 = parent2.Connections.Values.GetEnumerator();
 
             byte moreFitParent = parent1.Fitness > parent2.Fitness ? (byte)1 : (byte)2;
-            moreFitParent = parent1.Fitness == parent2.Fitness ? (byte)rnd.Next(1, 3) : moreFitParent;
+            moreFitParent = parent1.Fitness == parent2.Fitness ? (byte)0 : moreFitParent;
 
             bool has1 = enumerator1.MoveNext(), has2 = enumerator2.MoveNext();
             while(has1 || has2)
@@ -969,9 +904,9 @@ namespace NEAT
                 var cm = ConnectionMarkings.GetMarkings(c.Innovation);
 
                 if (offspring.GetNode(cm.In) == null)
-                    offspring.AddNode(new Node(cm.In, -1));
+                    offspring.AddNode(new Node(cm.In));
                 if (offspring.GetNode(cm.Out) == null)
-                    offspring.AddNode(new Node(cm.Out, -1));
+                    offspring.AddNode(new Node(cm.Out));
 
                 Connection nc = new Connection(cm.Innovation)
                 {
@@ -982,41 +917,45 @@ namespace NEAT
 
             }
 
-            offspring.RecalculateNodesDistance();
-
             return offspring;
         }        
 
-        public static void EvaluateNetwork(Genom g, Dictionary<int, double> inputValues, ActivationFunction af) // inputValues : sensorNodeId -> inputValue; return : nodeId -> value (for each node)
+        // bool resetValues -> true if network acts like feed forwars, false for recurrent ann
+        public static void EvaluateNetwork(Genom g, Dictionary<int, double> inputValues, ActivationFunction af, bool resetValues) // inputValues : sensorNodeId -> inputValue; return : nodeId -> value (for each node)
         {
             foreach (var node in g.Nodes.Values)
             {
-                node.ValueCalculated = false;
+                node.Visited = false;
+            }
+
+            if (resetValues)
+                foreach (var node in g.Nodes.Values)
+                {
+                    node.ValueCalculated = false;
+                    node.Value = 0;
+                }
+
+            foreach (var sn in g.SensorNodes.Values)
+            {
+                sn.Value = inputValues[sn.ID];
+                sn.ValueCalculated = true;
             }
 
             foreach (var outNode in g.OutputNodes.Values)
             {
-                EvaluateNodeRec(g, outNode.ID, inputValues, af);
+                EvaluateNodeRec(g, outNode.ID, af);
             }
         }
 
-        private static void EvaluateNodeRec(Genom g, int nodeId, Dictionary<int, double> values, ActivationFunction af)
+        private static void EvaluateNodeRec(Genom g, int nodeId, ActivationFunction af)
         {
 
             var node = g.GetNode(nodeId);
-            if (node.ValueCalculated)
+            if (node.Visited)
                 return;
 
-            if (NodeMarkings.GetMarkings(nodeId).Type == NodeMarkings.NodeType.SENSOR)
-            {
-                if (!values.ContainsKey(nodeId))
-                    throw new Exception("No value for node id : " + nodeId);
-                node.Value = values[nodeId];
-                node.ValueCalculated = true;
-                return;
-            }
+            node.Visited = true;
 
-            node.Value = 0;
             bool inputsExist = false;
             foreach (var inputConn in g.Inputs(nodeId))
             {
@@ -1025,7 +964,7 @@ namespace NEAT
                 inputsExist = true;
                 var inNode = g.GetNode(ConnectionMarkings.GetMarkings(inputConn.Innovation).In);
                 if (!inNode.ValueCalculated)
-                    EvaluateNodeRec(g, inNode.ID, values, af);
+                    EvaluateNodeRec(g, inNode.ID, af);
                 node.Value += inNode.Value * inputConn.Weight;
             }
 
