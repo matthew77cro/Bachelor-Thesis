@@ -69,7 +69,6 @@ namespace NEAT
         
         public int ID { get; private set; }
         public double Value { get; set; }
-        public bool ValueCalculated { get; set; }
         public bool Visited { get; set; }
 
         public Node(int id)
@@ -88,7 +87,7 @@ namespace NEAT
             {
                 ID = this.ID,
                 Value = this.Value,
-                ValueCalculated = this.ValueCalculated
+                Visited = this.Visited
             };
         }
 
@@ -206,7 +205,7 @@ namespace NEAT
         private readonly SortedDictionary<int, Node> hiddenNodes; // just hidden nodes
         private readonly SortedDictionary<int, Node> outputNodes; // just output nodes
         private readonly SortedDictionary<int, Connection> connections; // all connections (innovation -> connection)
-        private readonly SortedDictionary<int, Dictionary<int, Connection>> inputs; // inputs : nodeX -> (inputNodesToNodeX -> ConnectionThatConnectsThoseTwoNodes)
+        private readonly SortedDictionary<int, SortedDictionary<int, Connection>> inputs; // inputs : nodeX -> (inputNodesToNodeX -> ConnectionThatConnectsThoseTwoNodes)
 
         public IReadOnlyDictionary<int, Node> Nodes { get { return nodes; } }
         public IReadOnlyDictionary<int, Node> SensorNodes { get { return sensorNodes; } }
@@ -224,7 +223,7 @@ namespace NEAT
             hiddenNodes = new SortedDictionary<int, Node>();
             outputNodes = new SortedDictionary<int, Node>();
             connections = new SortedDictionary<int, Connection>();
-            inputs = new SortedDictionary<int, Dictionary<int, Connection>>();
+            inputs = new SortedDictionary<int, SortedDictionary<int, Connection>>();
             Fitness = double.MinValue;
             FitnessCalculated = false;
         }
@@ -261,7 +260,7 @@ namespace NEAT
                 var cm = ConnectionMarkings.GetMarkings(kvp.Key);
                 var c = kvp.Value.Copy();
                 g.connections.Add(kvp.Key, c);
-                if (!g.inputs.ContainsKey(cm.Out)) g.inputs.Add(cm.Out, new Dictionary<int, Connection>());
+                if (!g.inputs.ContainsKey(cm.Out)) g.inputs.Add(cm.Out, new SortedDictionary<int, Connection>());
                 g.inputs[cm.Out].Add(cm.In, c);
             }
 
@@ -309,7 +308,7 @@ namespace NEAT
 
             connections.Add(connection.Innovation, connection);
 
-            if (!inputs.ContainsKey(cm.Out)) inputs.Add(cm.Out, new Dictionary<int, Connection>());
+            if (!inputs.ContainsKey(cm.Out)) inputs.Add(cm.Out, new SortedDictionary<int, Connection>());
             inputs[cm.Out].Add(cm.In, connection);
 
             this.version++;
@@ -377,7 +376,7 @@ namespace NEAT
             connections.Add(cm1.Innovation, c1);
             connections.Add(cm2.Innovation, c2);
             inputs[oldM.Out].Add(newNodeId, c2);
-            inputs.Add(newNodeId, new Dictionary<int, Connection>());
+            inputs.Add(newNodeId, new SortedDictionary<int, Connection>());
             inputs[newNodeId].Add(oldM.In, c1);
 
             this.version++;
@@ -399,7 +398,7 @@ namespace NEAT
                 Weight = weight
             };
             connections.Add(innovation, c);
-            if (!inputs.ContainsKey(cm.Out)) inputs.Add(cm.Out, new Dictionary<int, Connection>());
+            if (!inputs.ContainsKey(cm.Out)) inputs.Add(cm.Out, new SortedDictionary<int, Connection>());
             inputs[cm.Out].Add(cm.In, c);
 
             this.version++;
@@ -926,6 +925,7 @@ namespace NEAT
         // bool resetValues -> true if network acts like feed forwars, false for recurrent ann
         public static void EvaluateNetwork(Genom g, Dictionary<int, double> inputValues, ActivationFunction af, bool resetValues) // inputValues : sensorNodeId -> inputValue; return : nodeId -> value (for each node)
         {
+
             foreach (var node in g.Nodes.Values)
             {
                 node.Visited = false;
@@ -934,20 +934,20 @@ namespace NEAT
             if (resetValues)
                 foreach (var node in g.Nodes.Values)
                 {
-                    node.ValueCalculated = false;
                     node.Value = 0;
                 }
 
             foreach (var sn in g.SensorNodes.Values)
             {
                 sn.Value = inputValues[sn.ID];
-                sn.ValueCalculated = true;
+                sn.Visited = true;
             }
 
             foreach (var outNode in g.OutputNodes.Values)
             {
                 EvaluateNodeRec(g, outNode.ID, af);
             }
+
         }
 
         private static void EvaluateNodeRec(Genom g, int nodeId, ActivationFunction af)
@@ -960,20 +960,19 @@ namespace NEAT
             node.Visited = true;
 
             bool inputsExist = false;
+            double value = 0;
             foreach (var inputConn in g.Inputs(nodeId))
             {
                 if (!inputConn.Enabled)
                     continue;
                 inputsExist = true;
                 var inNode = g.GetNode(ConnectionMarkings.GetMarkings(inputConn.Innovation).In);
-                if (!inNode.ValueCalculated)
-                    EvaluateNodeRec(g, inNode.ID, af);
-                node.Value += inNode.Value * inputConn.Weight;
+                EvaluateNodeRec(g, inNode.ID, af);
+                value += inNode.Value * inputConn.Weight;
             }
 
             if(inputsExist)
-                node.Value = af(node.Value);
-            node.ValueCalculated = true;
+                node.Value = af(value);
 
         }
 
