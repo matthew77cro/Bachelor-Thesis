@@ -13,7 +13,7 @@ namespace NEATTest
         {
 
             // xor 2 inputs + 1 bias
-            NEATPopulation neat = new NEATPopulation(3, 1, 150, 0.8, 0.9, 0.03, 0.05, RandomWeight, Fitness, 1, 1, 0.4, 3, 5, 0.25, Chooser);
+            NEATPopulation neat = new NEATPopulation(3, 1, 100, 0.8, 0.9, 0.03, 0.05, RandomWeight, Fitness, 1, 1, 3, 4, 5, 0.5, Chooser, true);
             Console.WriteLine("Gen" + neat.GenerationNumber + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count + " Connections: " + neat.Population[0].Connections.Count);
             
             while (neat.Population[0].Fitness != 4)

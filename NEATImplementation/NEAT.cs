@@ -455,6 +455,8 @@ namespace NEAT
         private readonly List<int> outputNodeIds = new List<int>();
         private List<Genom> population = new List<Genom>();
 
+        public List<List<Genom>> species = new List<List<Genom>>();
+
         public int NumberOfInputs { get; }
         public int NumberOfOutputs { get; }
         public int PopulationSize { get; }
@@ -471,6 +473,7 @@ namespace NEAT
         public int GenomsInSpeciesChampionCopyThreshold { get; } // The champion of each species with more than GenomsInSpeciesChampionCopyThreshold networks is copied into the next generation unchanged
         public double CopyWithOnlyMutationPercentage { get; } // How much of a population is to be copied without crossover operator but only mutation
         public Algorithms.GeneChooser Chooser { get; }
+        public bool InterspeciesCrossover { get; }
         public IList<int> InputNodeIds
         {
             get
@@ -494,7 +497,7 @@ namespace NEAT
         }
         public int GenerationNumber { get; private set; }
 
-        public NEATPopulation(int numOfInputs, int numOfOutputs, int populationSize, double weightMutationRate, double weightMutationPerturbationRate, double addNodeMutationRate, double addConnectionMutationRate, GetRandomConnectionWeight rw, Fitness calculator, double c1, double c2, double c3, double compatibilityDistanceThreshold, int genomsInSpeciesChampionCopyThreshold, double copyWithOnlyMutationPercentage, Algorithms.GeneChooser chooser)
+        public NEATPopulation(int numOfInputs, int numOfOutputs, int populationSize, double weightMutationRate, double weightMutationPerturbationRate, double addNodeMutationRate, double addConnectionMutationRate, GetRandomConnectionWeight rw, Fitness calculator, double c1, double c2, double c3, double compatibilityDistanceThreshold, int genomsInSpeciesChampionCopyThreshold, double copyWithOnlyMutationPercentage, Algorithms.GeneChooser chooser, bool interspeciesCrossover)
         {
             NumberOfInputs = numOfInputs;
             NumberOfOutputs = numOfOutputs;
@@ -512,6 +515,7 @@ namespace NEAT
             GenomsInSpeciesChampionCopyThreshold = genomsInSpeciesChampionCopyThreshold;
             CopyWithOnlyMutationPercentage = copyWithOnlyMutationPercentage;
             Chooser = chooser;
+            InterspeciesCrossover = interspeciesCrossover;
 
             for (int i = 0; i < numOfInputs; i++)
                 inputNodeIds.Add(new NodeMarkings(NodeMarkings.NodeType.SENSOR).ID);
@@ -550,23 +554,37 @@ namespace NEAT
                 population.Add(g);
             }
 
-            CalculateFitnessAndSortDescending();
+            CalculateFitness();
+            SortDescending();
+            Speciate();
         }
 
         public void Advance()
         {
 
-            List<Genom> newPopulation = new List<Genom>();
-
-            Dictionary<List<Genom>, double> species = SpeciateAndFitnessSum();
+            List<double> speciesFitness = new List<double>();
             double allSpeciesFitnessSum = 0;
+
+            foreach (var spec in species)
+            {
+                double sum = 0;
+                foreach (var g in spec)
+                {
+                    sum += g.Fitness;
+                }
+                speciesFitness.Add(sum);
+                allSpeciesFitnessSum += sum;
+            }
+            
+            AdjustFitness();
+
+            List<Genom> newPopulation = new List<Genom>();
 
             // The champion of each species with more than GenomsInSpeciesChampionCopyThreshold networks is copied into the next generation unchanged
             // Also calculating allSpeciesFitnessSum
-            foreach (var kvp in species)
+            for (int i = 0; i < species.Count; i++)
             {
-                var spec = kvp.Key;
-                allSpeciesFitnessSum += kvp.Value;
+                var spec = species[i];
 
                 if (spec.Count > GenomsInSpeciesChampionCopyThreshold)
                 {
@@ -586,13 +604,13 @@ namespace NEAT
                 }
             }
 
-            // p% of the population copied with mutation without crossover
-            int _25percentOfPopulation = (int) (CopyWithOnlyMutationPercentage * PopulationSize);
+            // p% of the population copied only with mutation and without crossover
+            int percentOfPopulation = (int) (CopyWithOnlyMutationPercentage * PopulationSize);
 
-            for (int i = 0; i < _25percentOfPopulation && newPopulation.Count < PopulationSize; i++)
+            for (int i = 0; i < percentOfPopulation && newPopulation.Count < PopulationSize; i++)
             {
-                var g = SelectProportionally(species, 0);
-                var gCopy = g.Copy();
+                var g = SelectProportionally(allSpeciesFitnessSum, speciesFitness, -1);
+                var gCopy = g.G.Copy();
                 Mutate(gCopy);
                 newPopulation.Add(gCopy);
             }
@@ -600,24 +618,29 @@ namespace NEAT
             // Filling rest with crossover
             while (newPopulation.Count < PopulationSize)
             {
-                var g1 = SelectProportionally(species, 0);
-                var g2 = SelectProportionally(species, 0);
-                var offspring = Algorithms.Crossover(g1, g2, Chooser);
+                var g1 = SelectProportionally(allSpeciesFitnessSum, speciesFitness, -1);
+                GenomSelection g2;
+                if (InterspeciesCrossover)
+                    g2 = SelectProportionally(allSpeciesFitnessSum, speciesFitness, -1);
+                else
+                    g2 = SelectProportionally(allSpeciesFitnessSum, speciesFitness, g1.SpeciesId);
+                var offspring = Algorithms.Crossover(g1.G, g2.G, Chooser);
                 Mutate(offspring);
                 newPopulation.Add(offspring);
             }
 
             population = newPopulation;
 
-            CalculateFitnessAndSortDescending();
+            CalculateFitness();
+            SortDescending();
+            Speciate();
 
             GenerationNumber++;
         }
 
-        private Dictionary<List<Genom>, double> SpeciateAndFitnessSum()
+        private void Speciate()
         {
-            var species = new List<List<Genom>>();
-            var toReturn = new Dictionary<List<Genom>, double>();
+            species.Clear();
 
             foreach (var genom in population)
             {
@@ -637,22 +660,20 @@ namespace NEAT
                     species.Add(new List<Genom>() { genom });
                 }
             }
+        }
 
-            // calculate the adjusted fitness
+        private void AdjustFitness()
+        {
 
             foreach (var spec in species)
             {
                 int sh = spec.Count;
-                double specSum = 0;
                 foreach (var genom in spec)
                 {
                     genom.Fitness /= sh;
-                    specSum += genom.Fitness;
                 }
-                toReturn.Add(spec, specSum);
             }
 
-            return toReturn;
         }
 
         private double CompatibilityDistance(Genom g1, Genom g2)
@@ -718,32 +739,38 @@ namespace NEAT
 
         }
 
-        private Genom SelectProportionally(Dictionary<List<Genom>, double> speciesAndFitnessSums, double allSpeciesFitnessSum)
+        private GenomSelection SelectProportionally(double allSpeciesFitnessSum, List<double> speciesFitness, int speciesId)
         {
             double random = rnd.NextDouble() * allSpeciesFitnessSum;
 
-            List<Genom> pickedSpecies = null;
-            double pickedSpeciesFitness = 0;
+            int pickedSpeciesId;
 
-            double fitnessSumCount = 0;
-
-            foreach (var kvp in speciesAndFitnessSums)
+            if (speciesId == -1)
             {
-                fitnessSumCount += kvp.Value;
-                pickedSpecies = kvp.Key;
-                pickedSpeciesFitness = kvp.Value;
+                double fitnessSum = 0;
 
-                if (fitnessSumCount > random)
-                    break;
+                for (pickedSpeciesId = 0; pickedSpeciesId < species.Count; pickedSpeciesId++)
+                {
+                    fitnessSum += speciesFitness[pickedSpeciesId];
+                    if (fitnessSum > random)
+                        break;
+                }
+
+                if (pickedSpeciesId == species.Count)
+                    pickedSpeciesId--;
+            }
+            else
+            {
+                pickedSpeciesId = speciesId;
             }
 
-            random = rnd.NextDouble() * pickedSpeciesFitness;
+            random = rnd.NextDouble() * speciesFitness[pickedSpeciesId];
 
             Genom pickedGenom = null;
 
-            fitnessSumCount = 0;
+            double fitnessSumCount = 0;
 
-            foreach (var g in pickedSpecies)
+            foreach (var g in species[pickedSpeciesId])
             {
                 fitnessSumCount += g.Fitness;
                 pickedGenom = g;
@@ -752,7 +779,11 @@ namespace NEAT
                     break;
             }
 
-            return pickedGenom;
+            return new GenomSelection()
+            {
+                G = pickedGenom,
+                SpeciesId = pickedSpeciesId
+            };
         }
 
         private void Mutate(Genom g)
@@ -815,7 +846,7 @@ namespace NEAT
 
         }
 
-        private void CalculateFitnessAndSortDescending()
+        private void CalculateFitness()
         {
 
             foreach (var g in population)
@@ -824,8 +855,22 @@ namespace NEAT
                 g.FitnessCalculated = true;
             }
 
+        }
+
+        private void SortDescending()
+        {
             population.Sort((g1, g2) => g2.Fitness.CompareTo(g1.Fitness));
 
+            foreach (var spec in species)
+            {
+                spec.Sort((g1, g2) => g2.Fitness.CompareTo(g1.Fitness));
+            }
+        }
+
+        private struct GenomSelection
+        {
+            public Genom G { get; set; }
+            public int SpeciesId { get; set; }
         }
 
     }
