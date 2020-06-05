@@ -62,6 +62,13 @@ namespace NEAT
 
             return dict[id];
         }
+
+        public static void Reset()
+        {
+            dict.Clear();
+            lst.Clear();
+            nextId = 0;
+        }
     }
 
     class Node
@@ -160,6 +167,14 @@ namespace NEAT
                 return null;
 
             return dict2[inNode][outNode];
+        }
+
+        public static void Reset()
+        {
+            dict.Clear();
+            dict2.Clear();
+            lst.Clear();
+            nextId = 0;
         }
     }
 
@@ -456,6 +471,7 @@ namespace NEAT
         private List<Genom> population = new List<Genom>();
 
         public List<List<Genom>> species = new List<List<Genom>>();
+        public Genom best = null;
 
         public int NumberOfInputs { get; }
         public int NumberOfOutputs { get; }
@@ -557,6 +573,7 @@ namespace NEAT
             CalculateFitness();
             SortDescending();
             Speciate();
+            DetermineBest();
         }
 
         public void Advance()
@@ -634,6 +651,7 @@ namespace NEAT
             CalculateFitness();
             SortDescending();
             Speciate();
+            DetermineBest();
 
             GenerationNumber++;
         }
@@ -865,6 +883,27 @@ namespace NEAT
             {
                 spec.Sort((g1, g2) => g2.Fitness.CompareTo(g1.Fitness));
             }
+        }
+
+        // Population needs to be sorted desc by fitness before this function call
+        private void DetermineBest()
+        {
+
+            Genom best = population[0];
+
+            foreach (var g in population)
+            {
+
+                if (g.Fitness < best.Fitness)
+                    break;
+
+                if (g.Nodes.Count < best.Nodes.Count)
+                    best = g;
+
+            }
+
+            this.best = best;
+
         }
 
         private struct GenomSelection
