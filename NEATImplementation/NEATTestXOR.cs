@@ -26,7 +26,7 @@ namespace NEATTest
                 ConnectionMarkings.Reset();
                 Console.WriteLine("-------------------Iteration " + i + "-------------------");
 
-                NEATPopulation neat = new NEATPopulation(2, 1, 150, 0.6, 0.9, 0.025, 0.025, RandomWeight, Fitness, 1, 1, 0.4, 3, 5, 0.5, Chooser, true);
+                NEATPopulation neat = new NEATPopulation(2, 1, 100, 0.6, 0.9, 0.025, 0.025, RandomWeight, Fitness, 1, 1, 0.4, 3, 5, 0.5, Chooser, true);
                 Console.WriteLine("Gen" + neat.GenerationNumber + " : " + neat.Population[0].Fitness + " Nodes: " + neat.Population[0].Nodes.Count + " Connections: " + neat.Population[0].Connections.Count);
 
                 int counter = 0;
