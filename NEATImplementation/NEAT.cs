@@ -570,7 +570,15 @@ namespace NEAT
                 population.Add(g);
             }
 
-            CalculateFitness();
+            if (calculator != null)
+            {
+                CalculateFitness();
+                FitnessCalculated();
+            }
+        }
+
+        public void FitnessCalculated()
+        {
             SortDescending();
             Speciate();
             DetermineBest();
@@ -648,10 +656,11 @@ namespace NEAT
 
             population = newPopulation;
 
-            CalculateFitness();
-            SortDescending();
-            Speciate();
-            DetermineBest();
+            if (Calculator != null)
+            {
+                CalculateFitness();
+                FitnessCalculated();
+            }
 
             GenerationNumber++;
         }
