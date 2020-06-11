@@ -52,7 +52,7 @@ namespace NEAT
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(ID);
+            return ID;
         }
 
         public static NodeMarkings GetMarkings(int id)
@@ -150,7 +150,7 @@ namespace NEAT
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Innovation);
+            return Innovation;
         }
 
         public static ConnectionMarkings GetMarkings(int innovation)
@@ -570,17 +570,19 @@ namespace NEAT
                 population.Add(g);
             }
 
+			Speciate();
+
             if (calculator != null)
             {
                 CalculateFitness();
                 FitnessCalculated();
             }
+			
         }
 
         public void FitnessCalculated()
         {
             SortDescending();
-            Speciate();
             DetermineBest();
         }
 
@@ -655,6 +657,8 @@ namespace NEAT
             }
 
             population = newPopulation;
+
+			Speciate();
 
             if (Calculator != null)
             {
