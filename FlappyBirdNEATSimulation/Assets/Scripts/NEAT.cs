@@ -73,7 +73,7 @@ namespace NEAT
 
     class Node
     {
-        
+
         public int ID { get; private set; }
         public double Value { get; set; }
         public bool Visited { get; set; }
@@ -570,17 +570,19 @@ namespace NEAT
                 population.Add(g);
             }
 
+            Speciate();
+
             if (calculator != null)
             {
                 CalculateFitness();
                 FitnessCalculated();
             }
+
         }
 
         public void FitnessCalculated()
         {
             SortDescending();
-            Speciate();
             DetermineBest();
         }
 
@@ -600,7 +602,7 @@ namespace NEAT
                 speciesFitness.Add(sum);
                 allSpeciesFitnessSum += sum;
             }
-            
+
             AdjustFitness();
 
             List<Genom> newPopulation = new List<Genom>();
@@ -630,7 +632,7 @@ namespace NEAT
             }
 
             // p% of the population copied only with mutation and without crossover
-            int percentOfPopulation = (int) (CopyWithOnlyMutationPercentage * PopulationSize);
+            int percentOfPopulation = (int)(CopyWithOnlyMutationPercentage * PopulationSize);
 
             for (int i = 0; i < percentOfPopulation && newPopulation.Count < PopulationSize; i++)
             {
@@ -655,6 +657,8 @@ namespace NEAT
             }
 
             population = newPopulation;
+
+            Speciate();
 
             if (Calculator != null)
             {
@@ -716,17 +720,17 @@ namespace NEAT
             int numOfGenes1 = 0, numOfGenes2 = 0;
 
             bool has1 = enum1.MoveNext(), has2 = enum2.MoveNext();
-            while(has1 || has2)
+            while (has1 || has2)
             {
                 if (has1 && has2)
                 {
-                    if(enum1.Current.Value.Innovation < enum2.Current.Value.Innovation)
+                    if (enum1.Current.Value.Innovation < enum2.Current.Value.Innovation)
                     {
                         d++;
                         has1 = enum1.MoveNext();
                         numOfGenes1++;
                     }
-                    else if(enum1.Current.Value.Innovation > enum2.Current.Value.Innovation)
+                    else if (enum1.Current.Value.Innovation > enum2.Current.Value.Innovation)
                     {
                         d++;
                         has2 = enum2.MoveNext();
@@ -940,7 +944,7 @@ namespace NEAT
             moreFitParent = parent1.Fitness == parent2.Fitness ? (byte)0 : moreFitParent;
 
             bool has1 = enumerator1.MoveNext(), has2 = enumerator2.MoveNext();
-            while(has1 || has2)
+            while (has1 || has2)
             {
                 Connection c = null;
 
@@ -975,7 +979,7 @@ namespace NEAT
                         has1 = enumerator1.MoveNext();
                     }
                 }
-                else if(has1 && !has2)
+                else if (has1 && !has2)
                 {
                     if (moreFitParent == (byte)2)
                     {
@@ -985,7 +989,7 @@ namespace NEAT
                     c = enumerator1.Current;
                     has1 = enumerator1.MoveNext();
                 }
-                else if(!has1 && has2)
+                else if (!has1 && has2)
                 {
                     if (moreFitParent == (byte)1)
                     {
@@ -1013,7 +1017,7 @@ namespace NEAT
             }
 
             return offspring;
-        }        
+        }
 
         // bool resetValues -> true if network acts like feed forwars, false for recurrent ann
         public static void EvaluateNetwork(Genom g, Dictionary<int, double> inputValues, ActivationFunction af, bool resetValues) // inputValues : sensorNodeId -> inputValue; return : nodeId -> value (for each node)
@@ -1064,7 +1068,7 @@ namespace NEAT
                 value += inNode.Value * inputConn.Weight;
             }
 
-            if(inputsExist)
+            if (inputsExist)
                 node.Value = af(value);
 
         }

@@ -9,18 +9,21 @@ public class Spawner : MonoBehaviour
     public const float PIPE_MAX_Y_DEVIATION = 2.8f;
     public const float PIPE_INIT_X_POS = 10f;
     public const float PIPE_DISTANCE = 6.5f;
+    public const int PIPE_MAX_DESPAWN_COUNT = 3;
 
     public GameObject birdPrefab;
     public GameObject pipePrefab;
 
     public Dictionary<int, GameObject> birds = new Dictionary<int, GameObject>(); // id -> bird
+    public Queue<GameObject> despawnPipes = new Queue<GameObject>();
     public Queue<GameObject> pipes = new Queue<GameObject>();
 
     private readonly System.Random rnd = new System.Random();
 
     private float lastPipeX;
+    private Bird.GameOverFunction gof;
 
-    public void Restart(Bird.GameOverFunction gof)
+    public void Restart()
     {
 
         foreach (var bird in birds.Values)
@@ -29,8 +32,18 @@ public class Spawner : MonoBehaviour
         foreach (var pipe in pipes)
             Destroy(pipe);
         pipes.Clear();
+        foreach (var pipe in despawnPipes)
+            Destroy(pipe);
+        despawnPipes.Clear();
 
-        for(int i = 0; i < GameLogic.POPULATION_SIZE; i++)
+    }
+
+    public void GameStart()
+    {
+
+        int numOfBirds = GameLogic.gameMode == GameLogic.GameMode.AI ? AI.POPULATION_SIZE : 1;
+
+        for (int i = 0; i < numOfBirds; i++)
         {
             var bird = Instantiate(birdPrefab);
             bird.GetComponent<Bird>().id = i;
@@ -41,11 +54,16 @@ public class Spawner : MonoBehaviour
         lastPipeX = PIPE_INIT_X_POS - PIPE_DISTANCE;
         for (int i = 0; i < PIPE_INIT_COUNT; i++)
         {
-            SpawnPipe();
+            float yPos = ((float)rnd.NextDouble()) * PIPE_MAX_Y_DEVIATION * 2 - PIPE_MAX_Y_DEVIATION;
+            lastPipeX += PIPE_DISTANCE;
+            pipes.Enqueue(Instantiate(pipePrefab, new Vector3(lastPipeX, yPos, 0), Quaternion.Euler(0, 0, 0)));
         }
 
-        GameObject.Find("Score").GetComponent<TextMesh>().text = "0";
+    }
 
+    public void GameOverSubscribe(Bird.GameOverFunction gof)
+    {
+        this.gof = gof;
     }
 
     public void SpawnPipe()
@@ -53,12 +71,13 @@ public class Spawner : MonoBehaviour
         float yPos = ((float)rnd.NextDouble()) * PIPE_MAX_Y_DEVIATION * 2 - PIPE_MAX_Y_DEVIATION;
         lastPipeX += PIPE_DISTANCE;
         pipes.Enqueue(Instantiate(pipePrefab, new Vector3(lastPipeX, yPos, 0), Quaternion.Euler(0, 0, 0)));
-    }
 
-    public void RemoveFirstPipe()
-    {
-        var pipe = pipes.Dequeue();
-        DestroyImmediate(pipe);
+        despawnPipes.Enqueue(pipes.Dequeue());
+
+        if (despawnPipes.Count > PIPE_MAX_DESPAWN_COUNT)
+        {
+            Destroy(despawnPipes.Dequeue());
+        }
     }
 
 }

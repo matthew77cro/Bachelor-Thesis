@@ -283,6 +283,26 @@ PrefabInstance:
       propertyPath: m_Text
       value: Start
       objectReference: {fileID: 0}
+    - target: {fileID: 967585263507793874, guid: e350de58eafb0a843b8414e90f8c109d,
+        type: 3}
+      propertyPath: m_FontStyle
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 967585263507793874, guid: e350de58eafb0a843b8414e90f8c109d,
+        type: 3}
+      propertyPath: m_Color.rgba
+      value: 4278190080
+      objectReference: {fileID: 0}
+    - target: {fileID: 967585263507793874, guid: e350de58eafb0a843b8414e90f8c109d,
+        type: 3}
+      propertyPath: m_Alignment
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 967585263507793874, guid: e350de58eafb0a843b8414e90f8c109d,
+        type: 3}
+      propertyPath: m_FontSize
+      value: 12
+      objectReference: {fileID: 0}
     - target: {fileID: 967585263507793876, guid: e350de58eafb0a843b8414e90f8c109d,
         type: 3}
       propertyPath: m_LocalPosition.x
