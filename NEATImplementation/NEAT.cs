@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace NEAT
 {
 
-    class NodeMarkings
+    public class NodeMarkings
     {
         private static readonly Dictionary<int, NodeMarkings> dict = new Dictionary<int, NodeMarkings>();
         private static readonly List<int> lst = new List<int>();
@@ -71,7 +71,7 @@ namespace NEAT
         }
     }
 
-    class Node
+    public class Node
     {
         
         public int ID { get; private set; }
@@ -100,7 +100,7 @@ namespace NEAT
 
     }
 
-    class ConnectionMarkings
+    public class ConnectionMarkings
     {
         private static readonly Dictionary<int, ConnectionMarkings> dict = new Dictionary<int, ConnectionMarkings>();
         private static readonly Dictionary<int, Dictionary<int, ConnectionMarkings>> dict2 = new Dictionary<int, Dictionary<int, ConnectionMarkings>>();
@@ -178,7 +178,7 @@ namespace NEAT
         }
     }
 
-    class Connection
+    public class Connection
     {
 
         public int Innovation { get; private set; }
@@ -208,7 +208,7 @@ namespace NEAT
 
     }
 
-    class Genom
+    public class Genom
     {
 
         private static readonly Random rnd = new Random();
@@ -458,7 +458,7 @@ namespace NEAT
 
     }
 
-    class NEATPopulation
+    public class NEATPopulation
     {
 
         private static readonly Random rnd = new Random();
@@ -927,7 +927,7 @@ namespace NEAT
 
     }
 
-    static class Algorithms
+    public static class Algorithms
     {
 
         public delegate Connection GeneChooser(Genom parent1, Genom parent2, int innovation);
