@@ -1,19 +1,15 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class GameLogic : MonoBehaviour
 {
 
     public Spawner spawner;
-    public Graphics graphics;
+    public CameraControl camcontrol;
 
-    public const string defaultText = "space = play; a = AI";
     public static GameMode gameMode = GameMode.NONE;
-    
+    public static AI ai;
+
     private bool jumpReleased = true;
-    private AI ai;
 
     // Start is called before the first frame update
     void Start()
@@ -21,8 +17,8 @@ public class GameLogic : MonoBehaviour
 
         spawner.Restart();
         spawner.GameOverSubscribe(GameOver);
-        graphics.Restart();
-        graphics.ScoreChangeSubscribe(ScoreChanged);
+        camcontrol.Restart();
+        camcontrol.ScoreChangeSubscribe(ScoreChanged);
 
     }
 
@@ -32,22 +28,31 @@ public class GameLogic : MonoBehaviour
 
         if (gameMode == GameMode.NONE)
         {
+            // Enter gamemode based on player input
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 gameMode = GameMode.PLAYER;
                 spawner.GameStart();
-                graphics.GameStart();
+                camcontrol.GameStart();
             }
             else if (Input.GetKeyDown(KeyCode.A))
             {
                 gameMode = GameMode.AI;
+                AI.Reset();
                 ai = new AI();
                 spawner.GameStart();
-                graphics.GameStart();
+                camcontrol.GameStart();
+            }
+            else if (Input.GetKeyDown(KeyCode.L) && ai != null && ai.Best != null)
+            {
+                gameMode = GameMode.LOAD_AI;
+                spawner.GameStart();
+                camcontrol.GameStart();
             }
         }
         else if (gameMode == GameMode.PLAYER)
         {
+            // Player controls bird jumps
             if (Input.GetKeyDown(KeyCode.Space) && jumpReleased)
             {
                 foreach (var bird in spawner.birds.Values)
@@ -59,15 +64,43 @@ public class GameLogic : MonoBehaviour
                 jumpReleased = true;
             }
         }
+        else if (gameMode == GameMode.AI || gameMode == GameMode.LOAD_AI)
+        {
+            // Exit AI gamemode
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                var fitness = camcontrol.cameraControl.transform.position.x;
+
+                spawner.Restart();
+                camcontrol.Restart();
+
+                if (gameMode == GameMode.AI)
+                {
+                    foreach (var genom in ai.Networks())
+                    {
+                        if (genom.FitnessCalculated)
+                            continue;
+
+                        genom.Fitness = fitness;
+                        genom.FitnessCalculated = true;
+                    }
+
+                    ai.FitnessCalculated();
+                }
+
+                gameMode = GameMode.NONE;
+
+            }
+        }
 
     }
 
     // FixedUpdate is called once per tick
     void FixedUpdate()
     {
-        if (gameMode == GameMode.AI && spawner.pipes.Count != 0)
+        if ((gameMode == GameMode.AI || gameMode == GameMode.LOAD_AI) && spawner.pipes.Count != 0)
         {
-
+            // Feed the AI and get output
             var nextPipe = spawner.pipes.Peek();
             var nextPipeT = nextPipe.transform.Find("Top Cover");
             var nextPipeB = nextPipe.transform.Find("Bottom Cover");
@@ -86,6 +119,7 @@ public class GameLogic : MonoBehaviour
                 if (output >= 0.5)
                     bird.GetComponent<Bird>().Jump();
             }
+
         }
     }
 
@@ -107,17 +141,17 @@ public class GameLogic : MonoBehaviour
         if (spawner.birds.Count == 0)
         {
             spawner.Restart();
-            graphics.Restart();
+            camcontrol.Restart();
 
             if (gameMode == GameMode.AI)
             {
+                ai.FitnessCalculated();
                 ai.Advance();
                 spawner.GameStart();
-                graphics.GameStart();
+                camcontrol.GameStart();
             }
-            else
+            else if (gameMode == GameMode.PLAYER || gameMode == GameMode.LOAD_AI)
             {
-                AI.Reset();
                 gameMode = GameMode.NONE;
             }
         }
@@ -125,13 +159,14 @@ public class GameLogic : MonoBehaviour
 
     public void ScoreChanged(int oldScore, int newScore)
     {
-        spawner.SpawnPipe();
+        spawner.NextPipe();
     }
 
     public enum GameMode
     {
         PLAYER,
         AI,
+        LOAD_AI,
         NONE
     }
 

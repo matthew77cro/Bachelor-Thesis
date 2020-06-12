@@ -54,9 +54,7 @@ public class Spawner : MonoBehaviour
         lastPipeX = PIPE_INIT_X_POS - PIPE_DISTANCE;
         for (int i = 0; i < PIPE_INIT_COUNT; i++)
         {
-            float yPos = ((float)rnd.NextDouble()) * PIPE_MAX_Y_DEVIATION * 2 - PIPE_MAX_Y_DEVIATION;
-            lastPipeX += PIPE_DISTANCE;
-            pipes.Enqueue(Instantiate(pipePrefab, new Vector3(lastPipeX, yPos, 0), Quaternion.Euler(0, 0, 0)));
+            SpawnPipe();
         }
 
     }
@@ -66,18 +64,26 @@ public class Spawner : MonoBehaviour
         this.gof = gof;
     }
 
-    public void SpawnPipe()
+    private void SpawnPipe()
     {
         float yPos = ((float)rnd.NextDouble()) * PIPE_MAX_Y_DEVIATION * 2 - PIPE_MAX_Y_DEVIATION;
         lastPipeX += PIPE_DISTANCE;
         pipes.Enqueue(Instantiate(pipePrefab, new Vector3(lastPipeX, yPos, 0), Quaternion.Euler(0, 0, 0)));
+    }
 
+    private void RemovePipe()
+    {
         despawnPipes.Enqueue(pipes.Dequeue());
-
         if (despawnPipes.Count > PIPE_MAX_DESPAWN_COUNT)
         {
             Destroy(despawnPipes.Dequeue());
         }
+    }
+
+    public void NextPipe()
+    {
+        SpawnPipe();
+        RemovePipe();
     }
 
 }

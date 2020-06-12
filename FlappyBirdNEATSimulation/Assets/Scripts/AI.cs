@@ -1,17 +1,17 @@
 ﻿using NEAT;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-class AI
+public class AI
 {
 
     public const int POPULATION_SIZE = 100;
 
-    private System.Random rnd = new System.Random();
-    private NEATPopulation neat;
+    private readonly System.Random rnd = new System.Random();
+    private readonly NEATPopulation neat;
+
+    public int Generation { get { return neat.GenerationNumber; } }
+    public Genom Best { get; private set; }
 
     public AI()
     {
@@ -62,13 +62,17 @@ class AI
 
     public Genom Network(int index)
     {
+
+        if (GameLogic.gameMode == GameLogic.GameMode.LOAD_AI)
+            return Best;
+
         return neat.Population[index];
     }
 
     public double EvaluateNetwork(int index, double distance, double distanceTop, double distanceBottom)
     {
 
-        var genom = neat.Population[index];
+        var genom = Network(index);
         var input = new Dictionary<int, double>() { { 0, distance }, { 1, distanceTop }, { 2, distanceBottom } };
 
         NEAT.Algorithms.EvaluateNetwork(genom, input, ActivationFunction, true);
@@ -82,9 +86,18 @@ class AI
         return 1.0 / (1 + Math.Pow(Math.E, -value));
     }
 
-    public void Advance()
+    public void FitnessCalculated()
     {
         neat.FitnessCalculated();
+
+        var newBest = neat.best;
+
+        if (this.Best == null || this.Best.Fitness < newBest.Fitness)
+            this.Best = newBest;
+    }
+
+    public void Advance()
+    {
         neat.Advance();
     }
 
