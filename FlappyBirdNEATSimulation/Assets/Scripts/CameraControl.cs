@@ -37,7 +37,7 @@ public class CameraControl : MonoBehaviour
 
             if (GameLogic.gameMode == GameLogic.GameMode.AI)
             {
-                infoObject.GetComponent<Text>().text = "Gen : " + GameLogic.ai.Generation + "\nESC to stop";
+                infoObject.GetComponent<Text>().text = "Gen : " + GameLogic.ai.Generation + "\nBirds : " + GameLogic.birdsAlive + "\nESC to stop";
             }
         }
     }

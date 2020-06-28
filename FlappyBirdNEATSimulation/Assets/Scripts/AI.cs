@@ -1,11 +1,15 @@
 ﻿using NEAT;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class AI
 {
 
+    public const int NUM_OF_INPUTS = 3;
+    public const int NUM_OF_OUTPUTS = 1;
     public const int POPULATION_SIZE = 100;
+
 
     private readonly System.Random rnd = new System.Random();
     private readonly NEATPopulation neat;
@@ -16,8 +20,8 @@ public class AI
     public AI()
     {
 
-        neat = new NEATPopulation(3, 1, POPULATION_SIZE, 0.8, 0.9, 0.03, 0.05, RandomWeight, null, 1, 1, 0.4, 3, 5, 0.25, Chooser, true);
-
+        neat = new NEATPopulation(NUM_OF_INPUTS, NUM_OF_OUTPUTS, POPULATION_SIZE, 0.8, 0.9, 0.03, 0.05, RandomWeight, null, 1, 1, 0.4, 3, 5, 0.25, Chooser, true);
+        
     }
 
     double RandomWeight()
@@ -73,11 +77,15 @@ public class AI
     {
 
         var genom = Network(index);
-        var input = new Dictionary<int, double>() { { 0, distance }, { 1, distanceTop }, { 2, distanceBottom } };
+        var input = new Dictionary<int, double>() { 
+            { neat.InputNodeIds[0], distance }, 
+            { neat.InputNodeIds[1], distanceTop }, 
+            { neat.InputNodeIds[2], distanceBottom } 
+        };
 
         NEAT.Algorithms.EvaluateNetwork(genom, input, ActivationFunction, true);
 
-        return genom.Nodes[3].Value;
+        return genom.Nodes[neat.OutputNodeIds[0]].Value;
 
     }
 
@@ -94,6 +102,8 @@ public class AI
 
         if (this.Best == null || this.Best.Fitness < newBest.Fitness)
             this.Best = newBest;
+
+        printStats();
     }
 
     public void Advance()
@@ -105,6 +115,27 @@ public class AI
     {
         NEAT.ConnectionMarkings.Reset();
         NEAT.NodeMarkings.Reset();
+    }
+
+    private void printStats()
+    {
+        double avgFitness = 0, medianFitness = 0;
+        foreach (var g in neat.Population)
+        {
+            avgFitness += g.Fitness;
+        }
+        avgFitness /= neat.PopulationSize;
+
+        if (POPULATION_SIZE % 2 == 0)
+        {
+            medianFitness = (neat.Population[POPULATION_SIZE / 2 - 1].Fitness + neat.Population[POPULATION_SIZE / 2].Fitness) / 2;
+        }
+        else
+        {
+            medianFitness = neat.Population[(int)Math.Floor(POPULATION_SIZE / 2.0)].Fitness;
+        }
+
+        Debug.Log("Generation " + Generation + " =>\tMax fitness : " + neat.best.Fitness + "\tAvg fintess : " + avgFitness + "\tMedian fitness : " + medianFitness);
     }
 
 }

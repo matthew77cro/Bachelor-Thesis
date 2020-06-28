@@ -8,6 +8,7 @@ public class GameLogic : MonoBehaviour
 
     public static GameMode gameMode = GameMode.NONE;
     public static AI ai;
+    public static int birdsAlive;
 
     private bool jumpReleased = true;
 
@@ -42,6 +43,7 @@ public class GameLogic : MonoBehaviour
                 ai = new AI();
                 spawner.GameStart();
                 camcontrol.GameStart();
+                birdsAlive = AI.POPULATION_SIZE;
             }
             else if (Input.GetKeyDown(KeyCode.L) && ai != null && ai.Best != null)
             {
@@ -136,6 +138,7 @@ public class GameLogic : MonoBehaviour
             var genom = ai.Network(id);
             genom.Fitness = bird.transform.position.x;
             genom.FitnessCalculated = true;
+            birdsAlive--;
         }
 
         if (spawner.birds.Count == 0)
@@ -149,6 +152,7 @@ public class GameLogic : MonoBehaviour
                 ai.Advance();
                 spawner.GameStart();
                 camcontrol.GameStart();
+                birdsAlive = AI.POPULATION_SIZE;
             }
             else if (gameMode == GameMode.PLAYER || gameMode == GameMode.LOAD_AI)
             {
